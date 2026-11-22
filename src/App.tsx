@@ -1,3 +1,6 @@
+import { CHAT_LIMITS } from "../shared/contracts";
+import { api } from "./lib/api";
+import { useCitySearch } from "./hooks/useCitySearch";
 import {
   ArrowUpRight,
   Bell,
@@ -68,8 +71,7 @@ function App() {
   const [menu, setMenu] = useState(false);
   const [draft, setDraft] = useState(profile);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Location[]>([]);
-  const [searchStatus, setSearchStatus] = useState("");
+  const { results, searchStatus } = useCitySearch(query);
   const [completed, setCompleted] = useState<string[]>(() =>
     readSaved("saans-completed", [], (v) => {
       const d = v as { date: string; ids: string[] };
@@ -105,8 +107,8 @@ function App() {
       ? commuteSavings(profile.distance)
       : 0;
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
+    api
+      .health()
       .then((d) => setAiMode(d.assistant))
       .catch(() => {});
   }, []);
@@ -128,51 +130,12 @@ function App() {
       block: "nearest",
     });
   }, [messages, chatBusy]);
-  useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([]);
-      setSearchStatus("");
-      return;
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setSearchStatus("Searching cities…");
-      try {
-        const response = await fetch(
-          `/api/locations?q=${encodeURIComponent(query.trim())}`,
-          { signal: controller.signal },
-        );
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error);
-        setResults(data);
-        setSearchStatus(
-          data.length
-            ? ""
-            : "No cities found. Try a nearby city or a different spelling.",
-        );
-      } catch (error) {
-        if (!controller.signal.aborted)
-          setSearchStatus(
-            error instanceof Error ? error.message : "Search unavailable.",
-          );
-      }
-    }, 350);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query]);
   async function loadAir(next = location) {
     const id = ++requestId.current;
     setAirBusy(true);
     setNotice("");
     try {
-      const response = await fetch(
-        `/api/air?lat=${next.latitude}&lon=${next.longitude}`,
-        { signal: AbortSignal.timeout(15000) },
-      );
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
+      const data = await api.air(next);
       if (id === requestId.current) setAir(data);
     } catch (error) {
       if (id === requestId.current) {
@@ -210,25 +173,21 @@ function App() {
     setChatOpen(true);
     setChatBusy(true);
     const history = messages
-      .slice(-8)
-      .map(({ role, content }) => ({ role, content: content.slice(0, 4000) }));
+      .slice(-CHAT_LIMITS.history)
+      .map(({ role, content }) => ({
+        role,
+        content: content.slice(0, CHAT_LIMITS.historyMessage),
+      }));
     setMessages((prev) => [...prev, { role: "user", content }]);
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: content,
-          history,
-          profile,
-          location,
-          aqi: air.aqi,
-          mode: air.mode,
-        }),
-        signal: AbortSignal.timeout(30000),
+      const data = await api.chat({
+        message: content,
+        history,
+        profile,
+        location,
+        aqi: air.aqi,
+        mode: air.mode,
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error);
       if (id !== chatRequestId.current) return;
       setMessages((prev) => [
         ...prev,

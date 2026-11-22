@@ -54,10 +54,12 @@ src/App.tsx          Application state, event coordination and layout
 src/pages/           One focused component per application page
 src/dialogs/         Profile, city search, sources and notification dialogs
 src/components/      Shared presentation components and assistant panel
-src/lib/             Browser persistence helpers with safe fallbacks
+src/lib/             Validated API client and browser persistence helpers
+src/hooks/           Cancellation-aware city search
 src/types.ts         Shared UI types
 src/styles.css       Responsive styles and accessibility rules
 shared/domain.ts     Validated profile types, AQI categories, plan engine and local guide
+shared/contracts.ts  Runtime-validated API contracts and shared chat limits
 server/app.ts        Express setup, security middleware and route registration
 server/routes/       Air-data and chat validation, responses and provider integration
 server/services/     Bounded upstream-response cache
@@ -75,6 +77,10 @@ The deterministic plan engine is shared by frontend and API. Network access is r
 - Household preferences, today's checklist and personal pledges stay in local storage. Chats remain in tab memory. When AI is enabled, chat and relevant context go to Google via the backend; the profile name is omitted. Google's API data handling terms apply. Do not submit sensitive medical information.
 - Community commitments are personal, local features; there are no fabricated members, events, social counts or published posts.
 - AI is not a clinician. Official local alerts and individual care plans take precedence. The symptom matcher is deliberately simple and cannot identify every emergency.
+
+## Quality gates
+
+Run `npm run verify` before submitting changes. It checks formatting, ESLint (including React hook rules), the production build, domain/API/client-contract tests, and browser/accessibility regressions. The GitHub Actions workflow runs the same checks on pushes and pull requests to `main`, with read-only repository permissions and no API secrets. Local browser tests use Edge; CI installs Chromium. Network responses are validated before reaching UI state; malformed data uses the existing fallback path.
 
 ## Before public deployment
 

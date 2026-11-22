@@ -9,10 +9,11 @@
     "start": "tsx server/index.ts",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc -b",
-    "verify": "npm run format:check && npm run build && npm test && npm run test:e2e",
+    "verify": "npm run format:check && npm run lint && npm run build && npm test && npm run test:e2e",
     "test:e2e": "playwright test",
-    "format": "prettier --write src server shared tests *.json *.ts *.md",
-    "format:check": "prettier --check src server shared tests *.json *.ts *.md"
+    "format": "prettier --write src server shared tests *.json *.ts *.md *.mjs .github",
+    "format:check": "prettier --check src server shared tests *.json *.ts *.md *.mjs .github",
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "express": "^5.1.0",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.65.1",
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
@@ -32,9 +34,13 @@
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.2",
     "concurrently": "^9.2.1",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
     "prettier": "^3.10.1",
     "tsx": "^4.20.5",
     "typescript": "~5.9.2",
+    "typescript-eslint": "^8.73.0",
     "vite": "^7.1.3"
   }
 }

@@ -1,30 +1,7 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { z } from "zod";
-import {
-  localReply,
-  locationSchema,
-  profileSchema,
-  sources,
-  urgentMessage,
-} from "../../shared/domain.ts";
-const chatSchema = z.object({
-  message: z.string().trim().min(1).max(2000),
-  profile: profileSchema,
-  location: locationSchema,
-  aqi: z.number().min(0).max(1000),
-  mode: z.enum(["demo", "model"]),
-  history: z
-    .array(
-      z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string().max(4000),
-      }),
-    )
-    .max(8)
-    .default([]),
-});
-
+import { chatRequestSchema } from "../../shared/contracts.ts";
+import { localReply, sources, urgentMessage } from "../../shared/domain.ts";
 export function registerChatRoutes(app: express.Express) {
   app.post(
     "/api/chat",
@@ -34,7 +11,7 @@ export function registerChatRoutes(app: express.Express) {
       message: { error: "Please wait a minute before sending more questions." },
     }),
     async (req, res) => {
-      const parsed = chatSchema.safeParse(req.body);
+      const parsed = chatRequestSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({
           error:
