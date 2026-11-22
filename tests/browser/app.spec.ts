@@ -1,6 +1,44 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
+test("reset clears household changes and saved commitments", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Personalize", exact: true }).click();
+  await page.getByLabel("What should we call you?").fill("Taylor");
+  await page.getByRole("button", { name: "Save my preferences" }).click();
+  await page.getByRole("button", { name: "Community", exact: true }).click();
+  await page.getByRole("button", { name: "I’m in" }).first().click();
+  await page.getByRole("button", { name: "About & resources" }).click();
+  await page.getByRole("button", { name: "Reset my local data" }).click();
+  await expect(page.getByRole("button", { name: "Committed" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Alex");
+  await expect(page.getByRole("button", { name: /Demo data/ })).toBeVisible();
+});
+
+test("daily plan download preserves source attribution and completion", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Complete: Take rail for essential trips" })
+    .click();
+  await page.getByRole("button", { name: "My daily plan" }).click();
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Save plan" }).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("saans-daily-plan.txt");
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(chunk);
+  const text = Buffer.concat(chunks).toString("utf8");
+  expect(text).toContain("[x] On your way: Take rail for essential trips");
+  expect(text).toContain("Illustrative demo");
+  expect(text).toContain("https://www.airnow.gov/aqi/aqi-basics/");
+});
+
 test("desktop dashboard, plan, profile, impact, chat and resources work together", async ({
   page,
 }) => {

@@ -1,4 +1,4 @@
-import { Activity, TrainFront, Home, Leaf, Check, Plus } from "lucide-react";
+import { Activity, Check, Home, Leaf, Plus, TrainFront } from "lucide-react";
 import type { Action, Profile } from "../../shared/domain";
 const iconMap = {
   train: TrainFront,

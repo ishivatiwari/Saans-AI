@@ -1,6 +1,6 @@
+import express from "express";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import express from "express";
 import { createApp } from "./app.ts";
 if (existsSync(".env")) process.loadEnvFile(".env");
 const app = createApp();

@@ -50,9 +50,17 @@ Production build is served at **http://localhost:3001**. `npm test` exercises AQ
 Browser tests use installed Microsoft Edge in headless mode. They cover desktop and mobile flows, worldwide location changes, persistence and automated axe checks of the dashboard and profile dialog. For other platforms, change `channel` in `playwright.config.ts` or install Playwright Chromium. Use `npm run format:check` for formatting validation.
 
 ```text
-src/                 React + TypeScript interface and responsive CSS
+src/App.tsx          Application state, event coordination and layout
+src/pages/           One focused component per application page
+src/dialogs/         Profile, city search, sources and notification dialogs
+src/components/      Shared presentation components and assistant panel
+src/lib/             Browser persistence helpers with safe fallbacks
+src/types.ts         Shared UI types
+src/styles.css       Responsive styles and accessibility rules
 shared/domain.ts     Validated profile types, AQI categories, plan engine and local guide
-server/app.ts        Express API, validation, caching, Gemini and data-provider adapters
+server/app.ts        Express setup, security middleware and route registration
+server/routes/       Air-data and chat validation, responses and provider integration
+server/services/     Bounded upstream-response cache
 server/index.ts      Environment loading and production/static server
 tests/               Domain and API integration tests
 ```

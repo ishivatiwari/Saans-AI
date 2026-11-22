@@ -1,33 +1,24 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  ArrowRight,
   ArrowUpRight,
   Bell,
-  BookOpen,
-  Check,
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  Earth,
-  Heart,
   Home,
   Info,
   LayoutDashboard,
   Leaf,
   MapPin,
   Menu,
-  RefreshCw,
-  Search,
-  Send,
   Settings2,
-  ShieldCheck,
   Sparkles,
   Sprout,
   Sun,
-  TrainFront,
   Users,
   X,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { Profile } from "../shared/domain";
 import {
   buildPlan,
   category,
@@ -41,16 +32,17 @@ import {
   sources,
   type AirData,
   type Location,
-  type Profile,
 } from "../shared/domain";
+import { AssistantPanel } from "./components/AssistantPanel";
+import { LocationDialog } from "./dialogs/LocationDialog";
+import { NotificationsDialog } from "./dialogs/NotificationsDialog";
+import { ProfileDialog } from "./dialogs/ProfileDialog";
+import { SourcesDialog } from "./dialogs/SourcesDialog";
+import { localDay, readSaved, save } from "./lib/storage";
+import type { ChatMessage, Page } from "./types";
 
-import { PageContent, type Page } from "./components/PageContent";
-import { Modal } from "./components/Primitives";
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-  mode?: string;
-};
+import { PageContent } from "./components/PageContent";
+
 const nav = [
   { label: "Overview", icon: LayoutDashboard },
   { label: "My daily plan", icon: Sun },
@@ -58,26 +50,6 @@ const nav = [
   { label: "My impact", icon: Sprout },
   { label: "Community", icon: Users },
 ] as const;
-function readSaved<T>(
-  key: string,
-  fallback: T,
-  validate: (value: unknown) => T,
-): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? validate(JSON.parse(raw)) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-function save(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* Private browsing may disable storage. */
-  }
-}
-const localDay = () => new Date().toLocaleDateString("en-CA");
 
 function App() {
   const [profile, setProfile] = useState(() =>
@@ -279,6 +251,39 @@ function App() {
     } finally {
       if (id === chatRequestId.current) setChatBusy(false);
     }
+  }
+  function resetLocalData() {
+    for (const key of [
+      "saans-profile",
+      "saans-location",
+      "saans-completed",
+      "saans-pledges",
+    ])
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        /* Storage can be disabled. */
+      }
+    chatRequestId.current++;
+    setChatBusy(false);
+    setProfile(defaultProfile);
+    setLocation(cities[0]);
+    setCompleted([]);
+    setPledges([]);
+    setMessages([]);
+    requestId.current++;
+    setAirBusy(false);
+    setAir(demoAir());
+    setModal(null);
+    setNotice("Your saved preferences and activity have been cleared.");
+  }
+  function saveProfile(nextProfile: Profile) {
+    chatRequestId.current++;
+    setChatBusy(false);
+    setMessages([]);
+    setProfile(nextProfile);
+    setCompleted([]);
+    setModal(null);
   }
   function exportPlan() {
     const text =
@@ -518,196 +523,22 @@ function App() {
                 </button>
               </footer>
             </div>
-            <aside
-              className={`right-column ${chatOpen ? "chat-open" : ""}`}
-              aria-label="Your air quality assistant"
-            >
-              <section className="assistant-card">
-                <div className="assistant-header">
-                  <span className="assistant-icon">
-                    <Sparkles size={21} />
-                  </span>
-                  <div>
-                    <h2>A little guidance, just for you.</h2>
-                    <span>
-                      <span className="status-dot" />
-                      {aiMode === "ai"
-                        ? "Gemini-powered companion"
-                        : "Your local air-care guide"}
-                    </span>
-                  </div>
-                  <button
-                    className="icon-button mobile-chat-close"
-                    onClick={() => setChatOpen(false)}
-                    aria-label="Close assistant"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                <div className="assistant-body">
-                  <div className="assistant-intro">
-                    <span className="mini-spark">
-                      <Sparkles size={16} />
-                    </span>
-                    <p>
-                      Hi {profile.name} <span aria-hidden="true">✳</span>
-                      <br />A busy day and a hazy sky? Let’s figure it out
-                      together.
-                    </p>
-                    <p>
-                      I can help you make small, practical choices for your
-                      household in <strong>{location.name}</strong>.
-                    </p>
-                    <div className="context-pills">
-                      <span>
-                        <MapPin size={11} />
-                        {location.name}
-                      </span>
-                      <span>
-                        <Users size={11} />
-                        {profile.children
-                          ? "Family with children"
-                          : "Your household"}
-                      </span>
-                    </div>
-                  </div>
-                  {messages.length === 0 && (
-                    <div className="prompt-list">
-                      <span className="eyebrow">A GOOD PLACE TO START</span>
-                      {[
-                        "Can the kids play outside today?",
-                        "How can I keep indoor air cleaner?",
-                        "Help me plan a cleaner commute",
-                      ].map((text) => (
-                        <button
-                          key={text}
-                          onClick={() => void sendMessage(text)}
-                        >
-                          {text}
-                          <ArrowUpRight size={14} />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div
-                    className="messages"
-                    aria-live="polite"
-                    aria-relevant="additions"
-                  >
-                    {messages.map((message, i) => (
-                      <div key={i} className={`message ${message.role}`}>
-                        <span>
-                          {message.role === "user"
-                            ? "YOU"
-                            : message.mode === "ai"
-                              ? "SAANS · GEMINI"
-                              : message.mode === "safety"
-                                ? "URGENT GUIDANCE"
-                                : "SAANS · LOCAL GUIDE"}
-                        </span>
-                        <p>{message.content}</p>
-                        {message.role === "assistant" &&
-                          message.mode !== "safety" && (
-                            <button
-                              className="text-button"
-                              onClick={() => setModal("sources")}
-                            >
-                              Guidance sources <ArrowUpRight size={11} />
-                            </button>
-                          )}
-                      </div>
-                    ))}
-                    {chatBusy && (
-                      <div className="thinking">
-                        <span />
-                        <span />
-                        <span />
-                        Finding a thoughtful next step…
-                      </div>
-                    )}
-                    <div ref={chatBottom} />
-                  </div>
-                </div>
-                <div className="chat-compose">
-                  <form
-                    onSubmit={(e: FormEvent) => {
-                      e.preventDefault();
-                      void sendMessage();
-                    }}
-                  >
-                    <input
-                      ref={inputRef}
-                      aria-label="Ask Saans a question"
-                      placeholder="What’s on your mind?"
-                      maxLength={2000}
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      disabled={chatBusy}
-                    />
-                    <button
-                      aria-label="Send message"
-                      disabled={chatBusy || !input.trim()}
-                    >
-                      <Send size={16} />
-                    </button>
-                  </form>
-                  <p>
-                    <ShieldCheck size={11} />
-                    Everyday guidance, not medical advice.
-                  </p>
-                </div>
-              </section>
-              <section className="household-card card">
-                <div className="section-row">
-                  <h3>Made for your household</h3>
-                  <button
-                    className="icon-button"
-                    onClick={() => {
-                      setDraft(profile);
-                      setModal("profile");
-                    }}
-                    aria-label="Edit household"
-                  >
-                    <Settings2 size={16} />
-                  </button>
-                </div>
-                <div className="household-item">
-                  <Users size={17} />
-                  <span>
-                    {profile.children
-                      ? "Family with children"
-                      : "Adults-only household"}
-                  </span>
-                </div>
-                <div className="household-item">
-                  <TrainFront size={17} />
-                  <span>
-                    {profile.commute === "car"
-                      ? "Usually travels by car"
-                      : profile.commute === "transit"
-                        ? "Usually takes public transport"
-                        : "Mostly works from home"}
-                  </span>
-                </div>
-                <div className="household-item">
-                  <Leaf size={17} />
-                  <span>
-                    {profile.budget === "free"
-                      ? "Simple, budget-friendly choices"
-                      : "Open to helpful upgrades"}
-                  </span>
-                </div>
-                <p>Your routine makes the advice more useful.</p>
-              </section>
-              <div className="care-note">
-                <Heart size={16} />
-                <p>
-                  Better air is a shared journey.
-                  <br />
-                  You don’t have to do everything today.
-                </p>
-              </div>
-            </aside>
+            <AssistantPanel
+              chatOpen={chatOpen}
+              aiMode={aiMode}
+              setChatOpen={setChatOpen}
+              profile={profile}
+              location={location}
+              messages={messages}
+              sendMessage={sendMessage}
+              setModal={setModal}
+              chatBusy={chatBusy}
+              chatBottom={chatBottom}
+              inputRef={inputRef}
+              input={input}
+              setInput={setInput}
+              setDraft={setDraft}
+            />
           </div>
         </main>
       </div>
@@ -716,284 +547,37 @@ function App() {
         Ask Saans
       </button>
       {modal === "profile" && (
-        <Modal title="Make Saans your own" close={() => setModal(null)}>
-          <p className="modal-description">
-            A few details help shape a more practical day. Saved only on this
-            device; relevant context is sent to Gemini when you chat.
-          </p>
-          <form
-            className="profile-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const parsed = profileSchema.safeParse(draft);
-              if (parsed.success) {
-                chatRequestId.current++;
-                setChatBusy(false);
-                setMessages([]);
-                setProfile(parsed.data);
-                setCompleted([]);
-                setModal(null);
-              }
-            }}
-          >
-            <label>
-              What should we call you?
-              <input
-                value={draft.name}
-                maxLength={40}
-                required
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              />
-            </label>
-            <fieldset>
-              <legend>Your household</legend>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={draft.children}
-                  onChange={(e) =>
-                    setDraft({ ...draft, children: e.target.checked })
-                  }
-                />
-                Children in the household
-              </label>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={draft.sensitive}
-                  onChange={(e) =>
-                    setDraft({ ...draft, sensitive: e.target.checked })
-                  }
-                />
-                Someone needs extra care around air pollution
-              </label>
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={draft.purifier}
-                  onChange={(e) =>
-                    setDraft({ ...draft, purifier: e.target.checked })
-                  }
-                />
-                We have an air purifier
-              </label>
-            </fieldset>
-            <div className="form-row">
-              <label>
-                Usual commute
-                <select
-                  value={draft.commute}
-                  onChange={(e) =>
-                    setDraft({
-                      ...draft,
-                      commute: e.target.value as Profile["commute"],
-                    })
-                  }
-                >
-                  <option value="car">Personal car</option>
-                  <option value="transit">Public transport</option>
-                  <option value="home">Work from home</option>
-                </select>
-              </label>
-              <label>
-                Daily travel (km)
-                <input
-                  type="number"
-                  min="0"
-                  max="200"
-                  step="1"
-                  required
-                  value={draft.distance}
-                  onChange={(e) =>
-                    setDraft({ ...draft, distance: Number(e.target.value) })
-                  }
-                />
-              </label>
-            </div>
-            <label>
-              Your preference
-              <select
-                value={draft.budget}
-                onChange={(e) =>
-                  setDraft({
-                    ...draft,
-                    budget: e.target.value as Profile["budget"],
-                  })
-                }
-              >
-                <option value="free">Start with no-cost habits</option>
-                <option value="flexible">Open to practical upgrades</option>
-              </select>
-            </label>
-            <small>
-              Updating your profile resets today’s checklist so estimates match
-              your new routine.
-            </small>
-            <button className="primary-button" type="submit">
-              Save my preferences <Check size={16} />
-            </button>
-          </form>
-        </Modal>
+        <ProfileDialog
+          onClose={() => setModal(null)}
+          draft={draft}
+          setDraft={setDraft}
+          onSave={saveProfile}
+        />
       )}
       {modal === "location" && (
-        <Modal title="Find your breathing space" close={() => setModal(null)}>
-          <p className="modal-description">
-            Search any city worldwide. Air-quality coverage and model resolution
-            vary by location.
-          </p>
-          <div className="search-field">
-            <Search size={18} />
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search city, anywhere in the world"
-              maxLength={80}
-              aria-label="Search cities"
-            />
-          </div>
-          <p className="tiny muted" role="status">
-            {searchStatus ||
-              (query.length < 2 ? "FEATURED CITIES" : "SEARCH RESULTS")}
-          </p>
-          <div className="city-results">
-            {(query.length >= 2 ? results : cities).map((city, i) => (
-              <button
-                key={`${city.latitude}-${city.longitude}-${i}`}
-                onClick={() => selectLocation(city)}
-              >
-                <span className="city-pin">
-                  <MapPin size={18} />
-                </span>
-                <span>
-                  <strong>{city.name}</strong>
-                  <small>{city.country}</small>
-                </span>
-                <ArrowRight size={16} />
-              </button>
-            ))}
-          </div>
-          <div className="location-foot">
-            <Earth size={15} />
-            City-level context. No precise location tracking.
-          </div>
-        </Modal>
+        <LocationDialog
+          setModal={setModal}
+          query={query}
+          setQuery={setQuery}
+          searchStatus={searchStatus}
+          results={results}
+          selectLocation={selectLocation}
+        />
       )}
       {modal === "sources" && (
-        <Modal
-          title="Good guidance starts with clarity"
-          close={() => setModal(null)}
-        >
-          <div className="resource-content">
-            <h3>Know what you’re looking at</h3>
-            <p>
-              Saans uses the <strong>US EPA AQI scale</strong> for all cities.
-              This is different from India’s National AQI. Demo readings are
-              illustrative. Current estimates and forecasts come from the CAMS
-              atmospheric model through Open-Meteo, not a sensor at your home.
-              They may differ from official local readings.
-            </p>
-            {sources.map((s) => (
-              <a
-                className="source-link"
-                key={s.url}
-                href={s.url}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <BookOpen size={18} />
-                <span>
-                  <strong>{s.title}</strong>
-                  <small>{s.provider}</small>
-                </span>
-                <ArrowUpRight size={16} />
-              </a>
-            ))}
-            <a
-              className="text-button"
-              href="https://atmosphere.copernicus.eu/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Copernicus Atmosphere Monitoring Service (CAMS){" "}
-              <ArrowUpRight size={13} />
-            </a>
-            <h3>Your privacy, simply</h3>
-            <p>
-              Preferences and checklists stay in your browser. Chats are held in
-              memory and clear on refresh. When Gemini is enabled, messages,
-              city and relevant household context are sent through our server to
-              Google. Your name is excluded from profile context. Avoid sharing
-              identifying or sensitive medical details. Google’s data terms
-              apply to API processing.
-            </p>
-            <h3>Useful support, with limits</h3>
-            <p>
-              AI can make mistakes. Follow local public-health advice and your
-              clinician’s care plan. Seek urgent help for severe breathing
-              difficulty or chest pain. Carbon estimates are illustrative, not
-              measured reductions.
-            </p>
-            <button
-              className="secondary-button"
-              onClick={() => {
-                for (const key of [
-                  "saans-profile",
-                  "saans-location",
-                  "saans-completed",
-                  "saans-pledges",
-                ])
-                  try {
-                    localStorage.removeItem(key);
-                  } catch {
-                    /* Storage can be disabled. */
-                  }
-                chatRequestId.current++;
-                setChatBusy(false);
-                setProfile(defaultProfile);
-                setLocation(cities[0]);
-                setCompleted([]);
-                setPledges([]);
-                setMessages([]);
-                requestId.current++;
-                setAirBusy(false);
-                setAir(demoAir());
-                setModal(null);
-                setNotice(
-                  "Your saved preferences and activity have been cleared.",
-                );
-              }}
-            >
-              Reset my local data
-            </button>
-          </div>
-        </Modal>
+        <SourcesDialog
+          onClose={() => setModal(null)}
+          onReset={resetLocalData}
+        />
       )}
       {modal === "notifications" && (
-        <Modal title="A quick air-care check-in" close={() => setModal(null)}>
-          <div className="notification-content">
-            <span className="action-icon activity">
-              <Bell size={24} />
-            </span>
-            <h3>
-              {status.label} air in {location.name}
-            </h3>
-            <p>
-              {air.mode === "demo"
-                ? "This is a demo scenario, not a current alert. Load current model data or consult your local authority for actual conditions."
-                : "This is model guidance, not an official public-health alert. Check your local authority for advisories."}
-            </p>
-            <button
-              className="primary-button"
-              onClick={() => {
-                setModal(null);
-                void loadAir();
-              }}
-            >
-              Refresh air quality <RefreshCw size={16} />
-            </button>
-          </div>
-        </Modal>
+        <NotificationsDialog
+          setModal={setModal}
+          status={status}
+          location={location}
+          air={air}
+          loadAir={loadAir}
+        />
       )}
     </div>
   );
