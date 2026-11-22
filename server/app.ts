@@ -52,6 +52,9 @@ const airSchema = z.object({
 });
 export function createApp() {
   const app = express();
+  if (process.env.RENDER === "true") {
+    app.set("trust proxy", 1);
+  }
   app.disable("x-powered-by");
   app.use(
     helmet({
